@@ -147,6 +147,10 @@ export default function SessionNoteScreen() {
                 onChangeText={setRawText}
                 multiline
               />
+              <View style={styles.dictateHint}>
+                <MaterialIcons name="mic" size={14} color={Colors.textMuted} />
+                <Text style={styles.dictateText}>Tip: tap the microphone on your keyboard to dictate instead of typing.</Text>
+              </View>
               <PButton label={structuring ? 'Structuring…' : 'Structure with AI'} onPress={runAI} loading={structuring} variant="secondary" />
               <Text style={styles.aiHint}>{DISCLAIMERS.AI_DRAFT}</Text>
             </View>
@@ -216,6 +220,8 @@ const styles = StyleSheet.create({
   aiLabel: { ...Typography.labelXS, color: Colors.primaryGlow },
   rawInput: { backgroundColor: Colors.cardAlt, borderColor: Colors.border, borderWidth: 1, borderRadius: Radius.md, padding: 12, minHeight: 90, ...Typography.bodyMD, color: Colors.textPrimary, textAlignVertical: 'top' },
   aiHint: { ...Typography.labelSM, color: Colors.textMuted, lineHeight: 17 },
+  dictateHint: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dictateText: { ...Typography.labelSM, color: Colors.textMuted, flex: 1 },
   field: { gap: 4 },
   fieldLabel: { ...Typography.dataMD, fontSize: 14 },
   fieldHint: { ...Typography.labelSM, color: Colors.textMuted },

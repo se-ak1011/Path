@@ -93,7 +93,8 @@ export default function MeasureScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.prompt}>Over the last two weeks, how often have you been bothered by…</Text>
+        <Text style={styles.prompt}>{def.prompt}</Text>
+        {def.note ? <Text style={styles.note}>{def.note}</Text> : null}
         {def.items.map((item, idx) => (
           <View key={idx} style={styles.itemCard}>
             <Text style={styles.itemText}>{idx + 1}. {item}</Text>
@@ -131,6 +132,7 @@ const styles = StyleSheet.create({
   disclaimer: { ...Typography.labelSM, color: Colors.textMuted, marginTop: Spacing.sm, textAlign: 'center' },
   scroll: { padding: Spacing.md, paddingTop: 0, paddingBottom: Spacing.xl, gap: Spacing.sm },
   prompt: { ...Typography.bodySM, color: Colors.textSecondary, marginBottom: Spacing.sm },
+  note: { ...Typography.labelSM, color: Colors.textMuted, marginBottom: Spacing.sm, lineHeight: 16 },
   itemCard: { backgroundColor: Colors.card, borderColor: Colors.border, borderWidth: 1, borderRadius: Radius.md, padding: 14, gap: 12 },
   itemText: { ...Typography.bodyMD, lineHeight: 20 },
   optionsRow: { flexDirection: 'row', gap: 8 },

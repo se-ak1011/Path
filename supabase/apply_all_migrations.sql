@@ -146,7 +146,7 @@ create table if not exists public.outcome_measures (
   therapist_id  uuid not null references auth.users (id) on delete cascade,
   client_id     uuid not null references public.clients (id) on delete cascade,
   session_id    uuid references public.sessions (id) on delete set null,
-  instrument    text not null check (instrument in ('phq9','gad7','core10')),
+  instrument    text not null check (instrument in ('phq9','gad7','core10','asrs','pcl5')),
   responses     jsonb not null default '[]'::jsonb,
   total_score   integer not null,
   severity      text,
@@ -154,6 +154,11 @@ create table if not exists public.outcome_measures (
   created_at    timestamptz not null default now()
 );
 create index if not exists outcome_measures_client_idx on public.outcome_measures (client_id, instrument, taken_on);
+
+-- Idempotently widen the allowed instruments on existing databases (adds ASRS + PCL-5).
+alter table public.outcome_measures drop constraint if exists outcome_measures_instrument_check;
+alter table public.outcome_measures add constraint outcome_measures_instrument_check
+  check (instrument in ('phq9','gad7','core10','asrs','pcl5'));
 
 -- ==================== invoices ====================
 create table if not exists public.invoices (

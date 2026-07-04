@@ -1,20 +1,32 @@
 // Outcome-measure definitions and scoring for PATH.
-// PHQ-9 (depression), GAD-7 (anxiety) and CORE-10 (global distress) are
-// widely used, free-to-use screening tools. Scores are indicative only and do
-// not constitute a diagnosis — clinical judgement remains with the therapist.
+// All instruments here are free to use and validated screening tools. Scores are
+// indicative only and never a diagnosis — clinical judgement stays with the
+// therapist, who administers and interprets them.
+//
+//   PHQ-9   depression        (Pfizer, free)
+//   GAD-7   anxiety           (Pfizer, free)
+//   CORE-10 global distress   (CORE System Trust, free)
+//   ASRS    adult ADHD        (WHO, ASRS v1.1 6-item screener, CC-BY)
+//   PCL-5   PTSD              (US National Center for PTSD, public domain)
 
-export type Instrument = 'phq9' | 'gad7' | 'core10';
+export type Instrument = 'phq9' | 'gad7' | 'core10' | 'asrs' | 'pcl5';
+export type Severity = 'low' | 'mild' | 'moderate' | 'high';
 
 export interface InstrumentDef {
   id: Instrument;
   name: string;
   subtitle: string;
+  prompt: string;
   items: string[];
   options: { label: string; value: number }[];
-  // CORE-10 reverses two positively-worded items when scoring.
-  reverseItems?: number[];
-  band: (score: number) => { label: string; severity: 'low' | 'mild' | 'moderate' | 'high' };
+  // 'sum' (default) adds item scores; 'count' counts items meeting a per-item
+  // threshold (used by the ASRS screener).
+  scoring?: 'sum' | 'count';
+  thresholds?: number[];        // ASRS: min value for an item to count as positive
+  reverseItems?: number[];      // CORE-10: positively-worded items are reverse-scored
+  band: (score: number) => { label: string; severity: Severity };
   max: number;
+  note?: string;                // shown under the score (e.g. citation / caveat)
 }
 
 const FREQ_0_3 = [
@@ -32,11 +44,28 @@ const CORE_0_4 = [
   { label: 'Most or all the time', value: 4 },
 ];
 
+const ASRS_0_4 = [
+  { label: 'Never', value: 0 },
+  { label: 'Rarely', value: 1 },
+  { label: 'Sometimes', value: 2 },
+  { label: 'Often', value: 3 },
+  { label: 'Very often', value: 4 },
+];
+
+const PCL_0_4 = [
+  { label: 'Not at all', value: 0 },
+  { label: 'A little bit', value: 1 },
+  { label: 'Moderately', value: 2 },
+  { label: 'Quite a bit', value: 3 },
+  { label: 'Extremely', value: 4 },
+];
+
 export const INSTRUMENTS: Record<Instrument, InstrumentDef> = {
   phq9: {
     id: 'phq9',
     name: 'PHQ-9',
     subtitle: 'Depression',
+    prompt: 'Over the last 2 weeks, how often have you been bothered by any of the following?',
     options: FREQ_0_3,
     max: 27,
     items: [
@@ -61,6 +90,7 @@ export const INSTRUMENTS: Record<Instrument, InstrumentDef> = {
     id: 'gad7',
     name: 'GAD-7',
     subtitle: 'Anxiety',
+    prompt: 'Over the last 2 weeks, how often have you been bothered by the following?',
     options: FREQ_0_3,
     max: 21,
     items: [
@@ -82,9 +112,9 @@ export const INSTRUMENTS: Record<Instrument, InstrumentDef> = {
     id: 'core10',
     name: 'CORE-10',
     subtitle: 'Global distress',
+    prompt: 'Over the last week, how have you felt?',
     options: CORE_0_4,
     max: 40,
-    // Items 2 and 3 (0-indexed 1 and 2) are positively worded and reverse-scored.
     reverseItems: [1, 2],
     items: [
       'I have felt tense, anxious or nervous',
@@ -106,14 +136,77 @@ export const INSTRUMENTS: Record<Instrument, InstrumentDef> = {
       s <= 24 ? { label: 'Moderate-to-severe', severity: 'high' } :
       { label: 'Severe', severity: 'high' },
   },
+  asrs: {
+    id: 'asrs',
+    name: 'ASRS v1.1',
+    subtitle: 'Adult ADHD screener',
+    prompt: 'Over the past 6 months, how often have you experienced the following?',
+    options: ASRS_0_4,
+    scoring: 'count',
+    // Part A darkened-box thresholds: items 1–3 ≥ Sometimes (2), items 4–6 ≥ Often (3).
+    thresholds: [2, 2, 2, 3, 3, 3],
+    max: 6,
+    note: 'WHO Adult ADHD Self-Report Scale (ASRS-v1.1). Screening only — a fuller assessment is needed to diagnose.',
+    items: [
+      'Trouble wrapping up the final details of a project, once the challenging parts are done',
+      'Difficulty getting things in order when you have to do a task that requires organisation',
+      'Problems remembering appointments or obligations',
+      'When a task requires a lot of thought, avoiding or delaying getting started',
+      'Fidgeting or squirming with your hands or feet when you have to sit for a long time',
+      'Feeling overly active and compelled to do things, as if driven by a motor',
+    ],
+    band: (s) =>
+      s >= 4
+        ? { label: 'Consistent with ADHD — consider fuller assessment', severity: 'high' }
+        : { label: 'Below screening threshold', severity: 'low' },
+  },
+  pcl5: {
+    id: 'pcl5',
+    name: 'PCL-5',
+    subtitle: 'PTSD',
+    prompt: 'In the past month, how much were you bothered by these problems (in response to a stressful experience)?',
+    options: PCL_0_4,
+    max: 80,
+    note: 'PTSD Checklist for DSM-5 (public domain). A provisional total ≥ 33 suggests probable PTSD; confirm with structured assessment.',
+    items: [
+      'Repeated, disturbing, unwanted memories of the stressful experience',
+      'Repeated, disturbing dreams of the stressful experience',
+      'Suddenly feeling or acting as if the experience were happening again',
+      'Feeling very upset when something reminded you of the experience',
+      'Strong physical reactions when reminded of the experience (heart pounding, sweating)',
+      'Avoiding memories, thoughts, or feelings related to the experience',
+      'Avoiding external reminders (people, places, conversations, activities, objects)',
+      'Trouble remembering important parts of the experience',
+      'Strong negative beliefs about yourself, other people, or the world',
+      'Blaming yourself or someone else for the experience or what happened after',
+      'Strong negative feelings such as fear, horror, anger, guilt, or shame',
+      'Loss of interest in activities you used to enjoy',
+      'Feeling distant or cut off from other people',
+      'Trouble experiencing positive feelings',
+      'Irritable behaviour, angry outbursts, or acting aggressively',
+      'Taking too many risks or doing things that could cause you harm',
+      'Being “superalert”, watchful, or on guard',
+      'Feeling jumpy or easily startled',
+      'Having difficulty concentrating',
+      'Trouble falling or staying asleep',
+    ],
+    band: (s) =>
+      s <= 19 ? { label: 'Minimal', severity: 'low' } :
+      s <= 32 ? { label: 'Sub-threshold', severity: 'mild' } :
+      s <= 49 ? { label: 'Probable PTSD', severity: 'high' } :
+      { label: 'Severe', severity: 'high' },
+  },
 };
 
 export function scoreInstrument(instrument: Instrument, responses: number[]): number {
   const def = INSTRUMENTS[instrument];
+  if (def.scoring === 'count' && def.thresholds) {
+    return responses.reduce((n, v, i) => n + (v >= (def.thresholds as number[])[i] ? 1 : 0), 0);
+  }
   return responses.reduce((sum, value, idx) => {
     if (def.reverseItems?.includes(idx)) {
-      const max = def.options[def.options.length - 1].value;
-      return sum + (max - value);
+      const maxVal = def.options[def.options.length - 1].value;
+      return sum + (maxVal - value);
     }
     return sum + value;
   }, 0);
