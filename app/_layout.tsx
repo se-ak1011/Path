@@ -61,6 +61,7 @@ export default function RootLayout() {
                       <Stack.Screen name="invoice/[id]" />
                       <Stack.Screen name="invoice/new" options={{ presentation: 'modal' }} />
                       <Stack.Screen name="messages/[clientId]" />
+                      <Stack.Screen name="resources/[id]" />
                       <Stack.Screen name="verification" />
                       <Stack.Screen name="supervision" />
                       <Stack.Screen name="admin-verifications" />

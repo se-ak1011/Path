@@ -34,6 +34,10 @@ export default function TabsLayout() {
         options={{ title: 'Sessions', tabBarIcon: ({ color, size }) => <MaterialIcons name="event" size={size} color={color} /> }}
       />
       <Tabs.Screen
+        name="resources"
+        options={{ title: 'Resources', tabBarIcon: ({ color, size }) => <MaterialIcons name="menu-book" size={size} color={color} /> }}
+      />
+      <Tabs.Screen
         name="taxpot"
         options={{ title: 'Tax Pot', tabBarIcon: ({ color, size }) => <MaterialIcons name="savings" size={size} color={color} /> }}
       />
