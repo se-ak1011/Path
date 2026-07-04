@@ -5,12 +5,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as MailComposer from 'expo-mail-composer';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { Colors, Typography, Spacing } from '@/constants/theme';
 import { PButton, PBadge, PCard } from '@/components';
 import { useClients } from '@/contexts/ClientsContext';
 import { useTaxPot } from '@/contexts/TaxPotContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useAlert } from '@/template/ui';
 import { getSupabaseClient } from '@/template/core';
+import { buildInvoiceHtml } from '@/lib/invoiceHtml';
 import { INVOICE_STATUS_LABELS } from '@/constants/config';
 
 interface Invoice {
@@ -24,6 +28,7 @@ export default function InvoiceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { clients } = useClients();
   const { refresh: refreshTaxPot } = useTaxPot();
+  const { user } = useAuth();
   const { showAlert } = useAlert();
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -53,6 +58,41 @@ export default function InvoiceDetailScreen() {
     if (error) { showAlert('Could not update', error.message); return; }
     setInvoice({ ...invoice, ...patch });
     if (status === 'paid') { refreshTaxPot(); showAlert('Marked paid', 'This payment now feeds your Tax Pot.'); }
+  };
+
+  const sharePdf = async () => {
+    if (!invoice) return;
+    try {
+      const html = buildInvoiceHtml({
+        invoice: {
+          number: invoice.number,
+          status: invoice.status,
+          line_items: invoice.line_items,
+          total: invoice.total,
+          issued_at: invoice.issued_at,
+          paid_at: invoice.paid_at,
+        },
+        billTo: client?.alias || client?.client_ref || 'Client',
+        therapist: {
+          full_name: user?.full_name,
+          practice_name: user?.practice_name,
+          email: user?.email,
+          logo_url: user?.logo_url,
+          professional_body: user?.professional_body,
+          membership_number: user?.membership_number,
+          city: user?.city,
+          postcode_area: user?.postcode_area,
+        },
+      });
+      const { uri } = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: `Invoice ${invoice.number}` });
+      } else {
+        showAlert('PDF ready', `Saved to ${uri}`);
+      }
+    } catch (err) {
+      showAlert('Could not generate PDF', err instanceof Error ? err.message : 'Unknown error');
+    }
   };
 
   const emailInvoice = async () => {
@@ -98,6 +138,7 @@ export default function InvoiceDetailScreen() {
         </PCard>
 
         <View style={styles.actions}>
+          <PButton label="Share branded PDF" onPress={sharePdf} />
           <PButton label="Email invoice" variant="secondary" onPress={emailInvoice} />
           {invoice.status === 'draft' ? <PButton label="Mark as sent" onPress={() => setStatus('sent')} loading={busy} /> : null}
           {invoice.status !== 'paid' ? <PButton label="Mark as paid" onPress={() => setStatus('paid')} loading={busy} /> : (

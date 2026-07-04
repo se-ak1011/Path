@@ -1,4 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { getSupabaseClient } from '@/template/core';
@@ -41,4 +42,46 @@ export async function getSignedUrl(bucket: string, path: string): Promise<string
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, SIGNED_URL_TTL);
   if (error || !data) return null;
   return data.signedUrl;
+}
+
+/**
+ * Pick an image (camera or library), upload it to a PUBLIC bucket and return its
+ * public URL. Used for the therapist avatar and practice logo (branding bucket).
+ * Path: {auth.uid()}/{kind}-{timestamp}.{ext}
+ */
+export async function pickAndUploadImage(
+  bucket: string,
+  userId: string,
+  kind: 'avatar' | 'logo',
+  source: 'camera' | 'library' = 'library',
+): Promise<{ url: string | null; error: string | null; cancelled?: boolean }> {
+  if (source === 'camera') {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) return { url: null, error: 'Camera permission is needed.' };
+  } else {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return { url: null, error: 'Photo library permission is needed.' };
+  }
+
+  const result = await (source === 'camera'
+    ? ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7, base64: true, allowsEditing: true, aspect: kind === 'avatar' ? [1, 1] : [3, 1] })
+    : ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, base64: true, allowsEditing: true, aspect: kind === 'avatar' ? [1, 1] : [3, 1] }));
+
+  if (result.canceled || !result.assets?.[0]) return { url: null, error: null, cancelled: true };
+  const asset = result.assets[0];
+  if (!asset.base64) return { url: null, error: 'Could not read the image.' };
+
+  const isPng = (asset.mimeType || '').includes('png');
+  const ext = isPng ? 'png' : 'jpg';
+  const path = `${userId}/${kind}-${Date.now()}.${ext}`;
+
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.storage.from(bucket).upload(path, decode(asset.base64), {
+    contentType: isPng ? 'image/png' : 'image/jpeg',
+    upsert: true,
+  });
+  if (error) return { url: null, error: error.message };
+
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return { url: data.publicUrl, error: null };
 }

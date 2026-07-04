@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -8,6 +9,7 @@ import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 import { PButton, PCard, PBadge } from '@/components';
 import { useAuth, getTrialDaysLeft, isTrialActive } from '@/hooks/useAuth';
 import { useAlert } from '@/template/ui';
+import { pickAndUploadImage } from '@/services/uploadService';
 import { DISCLAIMERS } from '@/constants/config';
 
 const VERIFY_VARIANT: Record<string, 'active' | 'paid' | 'draft' | 'cancelled'> = {
@@ -29,6 +31,18 @@ export default function ProfileScreen() {
   const [sessionFee, setSessionFee] = useState(user?.session_fee ? String(user.session_fee) : '');
   const [accepting, setAccepting] = useState(user?.accepting_clients ?? true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState<'avatar' | 'logo' | null>(null);
+
+  const uploadImage = async (kind: 'avatar' | 'logo') => {
+    if (!user) return;
+    setUploading(kind);
+    const { url, error, cancelled } = await pickAndUploadImage('branding', user.id, kind);
+    setUploading(null);
+    if (cancelled) return;
+    if (error || !url) { showAlert('Upload failed', error || 'Could not upload the image.'); return; }
+    const { error: sErr } = await updateProfile(kind === 'avatar' ? { avatar_url: url } : { logo_url: url });
+    if (sErr) showAlert('Image uploaded, save failed', sErr);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -64,9 +78,16 @@ export default function ProfileScreen() {
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{(user?.full_name || 'T').slice(0, 1).toUpperCase()}</Text>
-          </View>
+          <Pressable style={styles.avatar} onPress={() => uploadImage('avatar')}>
+            {user?.avatar_url ? (
+              <Image source={{ uri: user.avatar_url }} style={styles.avatarImg} contentFit="cover" />
+            ) : (
+              <Text style={styles.avatarText}>{(user?.full_name || 'T').slice(0, 1).toUpperCase()}</Text>
+            )}
+            <View style={styles.avatarBadge}>
+              <MaterialIcons name={uploading === 'avatar' ? 'hourglass-top' : 'photo-camera'} size={12} color={Colors.textInverse} />
+            </View>
+          </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{user?.full_name || 'Therapist'}</Text>
             <Text style={styles.email}>{user?.email}</Text>
@@ -103,6 +124,30 @@ export default function ProfileScreen() {
             {user?.subscription_status === 'active' ? 'Active' : isTrialActive(user) ? `Free trial — ${trialDays} days left` : 'Trial ended'}
           </Text>
           <Text style={styles.cardHint}>Billing via the App Store will be enabled soon (RevenueCat).</Text>
+        </PCard>
+
+        {/* Practice branding — appears on invoices */}
+        <PCard>
+          <Text style={styles.cardLabel}>PRACTICE BRANDING</Text>
+          <View style={styles.brandingRow}>
+            {user?.logo_url ? (
+              <Image source={{ uri: user.logo_url }} style={styles.logoPreview} contentFit="contain" />
+            ) : (
+              <View style={styles.logoPlaceholder}><Text style={styles.logoPlaceholderText}>PA|TH</Text></View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardHint}>
+                {user?.logo_url ? 'Your logo appears on invoices.' : 'Invoices use PATH branding until you add your own logo.'}
+              </Text>
+            </View>
+          </View>
+          <PButton
+            label={uploading === 'logo' ? 'Uploading…' : user?.logo_url ? 'Replace logo' : 'Upload practice logo'}
+            variant="secondary"
+            onPress={() => uploadImage('logo')}
+            loading={uploading === 'logo'}
+            style={{ marginTop: Spacing.sm }}
+          />
         </PCard>
 
         {editing ? (
@@ -178,7 +223,13 @@ const styles = StyleSheet.create({
   scroll: { padding: Spacing.md, paddingBottom: Spacing.xxl, gap: Spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: { width: 56, height: 56, borderRadius: Radius.lg, backgroundColor: Colors.primaryDim, borderWidth: 1, borderColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  avatarImg: { width: '100%', height: '100%', borderRadius: Radius.lg },
   avatarText: { ...Typography.dataLG, color: Colors.primaryGlow },
+  avatarBadge: { position: 'absolute', bottom: -4, right: -4, width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: Colors.bg },
+  brandingRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 10 },
+  logoPreview: { width: 72, height: 48, borderRadius: Radius.sm, backgroundColor: Colors.cardAlt },
+  logoPlaceholder: { width: 72, height: 48, borderRadius: Radius.sm, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.borderSubtle },
+  logoPlaceholderText: { ...Typography.dataMD, fontSize: 13, color: Colors.textSecondary, letterSpacing: 1 },
   name: { ...Typography.brandMD },
   email: { ...Typography.labelSM, color: Colors.textMuted, marginTop: 2 },
   verifyCard: { padding: 14 },

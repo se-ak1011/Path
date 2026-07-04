@@ -149,7 +149,7 @@ export function TaxPotProvider({ children }: { children: ReactNode }) {
           SYNC_TIMEOUT_MS, '[TaxPotContext] Timed out loading manual income'
         ),
         withTimeout(
-          supabase.from('invoices').select('id, total, paid_at, tax_rate').eq('therapist_id', user.id).eq('status', 'paid').not('paid_at', 'is', null),
+          supabase.from('invoices').select('id, total, paid_at').eq('therapist_id', user.id).eq('status', 'paid').not('paid_at', 'is', null),
           SYNC_TIMEOUT_MS, '[TaxPotContext] Timed out loading paid invoices'
         ),
         withTimeout(
