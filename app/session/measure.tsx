@@ -54,7 +54,10 @@ export default function MeasureScreen() {
     });
     setSaving(false);
     if (error) { showAlert('Could not save', error.message); return; }
-    showAlert('Measure saved', `${def.name}: ${score}/${def.max} (${band?.label})`);
+    showAlert(
+      'Measure saved',
+      `${def.name}: ${score}/${def.max} (${band?.label}).\n\nRecorded as guidance to support your clinical judgement — not a diagnosis.`
+    );
     router.back();
   };
 
@@ -77,7 +80,10 @@ export default function MeasureScreen() {
               <MaterialIcons name="chevron-right" size={24} color={Colors.textMuted} />
             </Pressable>
           ))}
-          <Text style={styles.disclaimer}>Scores are indicative screening tools, not a diagnosis.</Text>
+          <Text style={styles.disclaimer}>
+            These are screening aids to support your clinical judgement — a score is never a diagnosis
+            on its own. As the practitioner, the assessment is yours to make.
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -108,6 +114,13 @@ export default function MeasureScreen() {
           </View>
         ))}
       </ScrollView>
+
+      <View style={styles.footerNote}>
+        <MaterialIcons name="info-outline" size={13} color={Colors.textMuted} />
+        <Text style={styles.footerNoteText}>
+          Guidance only. Any diagnosis is your clinical decision as the practitioner — not the result of this test.
+        </Text>
+      </View>
 
       <View style={styles.footer}>
         <View style={styles.scoreBox}>
@@ -140,6 +153,8 @@ const styles = StyleSheet.create({
   optionActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   optionValue: { ...Typography.dataMD, color: Colors.textSecondary },
   optionValueActive: { color: Colors.textInverse },
+  footerNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+  footerNoteText: { ...Typography.labelSM, color: Colors.textMuted, flex: 1, lineHeight: 16 },
   footer: { flexDirection: 'row', gap: Spacing.md, alignItems: 'center', padding: Spacing.md, borderTopWidth: 1, borderTopColor: Colors.border },
   scoreBox: { alignItems: 'center', minWidth: 76 },
   scoreLabel: { ...Typography.labelXS },

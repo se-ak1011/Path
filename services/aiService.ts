@@ -42,18 +42,34 @@ export interface AINoteDraft {
   summary?: string;
 }
 
+// Everything the model may use to write a richer draft. All of it is clinical,
+// none of it is identifying — never include names, contact details or the
+// client reference.
+export interface SessionContext {
+  presentingIssue?: string;
+  sessionType?: string;
+  delivery?: string;
+  durationMin?: number;
+  date?: string;
+  recentMeasures?: { instrument: string; score: number; max: number; severity?: string; date: string }[];
+  previousNote?: string;   // brief summary/plan carried forward for continuity
+}
+
 /**
  * Turn messy free-text session notes into a structured draft the clinician
  * reviews and confirms. The draft is NEVER final — the therapist owns the record.
+ * The model is given the wider session context (presenting issue, session type,
+ * recent outcome scores, last note) so the draft reflects the whole picture,
+ * not only the text just typed.
  *
- * IMPORTANT: pass pseudonymised text only. Do not send client-identifying
- * details (names, contact info) to the model.
+ * IMPORTANT: pass pseudonymised, clinical context only. Never send client-
+ * identifying details (names, contact info, client reference).
  */
 export async function structureSessionNote(params: {
   template: 'soap' | 'dap' | 'free';
   rawText: string;
-  sessionType?: string;
   modalities?: string[];
+  context?: SessionContext;
 }): Promise<{ data: AINoteDraft | null; error: string | null }> {
   return callEdgeFunction<AINoteDraft>('ai-notes', params);
 }

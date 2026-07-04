@@ -7,9 +7,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 import { PButton, PBadge } from '@/components';
 import { useAuth } from '@/hooks/useAuth';
+import { useSessions } from '@/contexts/SessionsContext';
+import { useClients } from '@/contexts/ClientsContext';
 import { useAlert } from '@/template/ui';
 import { getSupabaseClient } from '@/template/core';
-import { structureSessionNote } from '@/services/aiService';
+import { structureSessionNote, type SessionContext } from '@/services/aiService';
+import { INSTRUMENTS, type Instrument } from '@/lib/outcomes';
 import { NOTE_TEMPLATE_FIELDS, NOTE_TEMPLATE_LABELS, DISCLAIMERS } from '@/constants/config';
 
 type Template = 'soap' | 'dap' | 'free';
@@ -20,6 +23,8 @@ export default function SessionNoteScreen() {
   const router = useRouter();
   const { sessionId, clientId } = useLocalSearchParams<{ sessionId?: string; clientId?: string }>();
   const { user } = useAuth();
+  const { sessions } = useSessions();
+  const { clients } = useClients();
   const { showAlert } = useAlert();
 
   const [template, setTemplate] = useState<Template>('soap');
@@ -54,10 +59,65 @@ export default function SessionNoteScreen() {
 
   const setField = (key: string, value: string) => setContent(prev => ({ ...prev, [key]: value }));
 
+  // Assemble the wider clinical picture so the AI draft reflects the whole
+  // session, not just the text typed. Clinical only — never identifying data.
+  const gatherContext = useCallback(async (): Promise<SessionContext> => {
+    const supabase = getSupabaseClient();
+    const ctx: SessionContext = {};
+
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      ctx.sessionType = session.session_type;
+      ctx.delivery = session.delivery;
+      ctx.durationMin = session.duration_min;
+      ctx.date = session.scheduled_at;
+    }
+    const client = clients.find(c => c.id === clientId);
+    if (client?.presenting_issue) ctx.presentingIssue = client.presenting_issue;
+
+    if (clientId) {
+      const { data: measures } = await supabase
+        .from('outcome_measures')
+        .select('instrument, total_score, severity, taken_on')
+        .eq('client_id', clientId)
+        .order('taken_on', { ascending: false })
+        .limit(5);
+      if (measures?.length) {
+        ctx.recentMeasures = measures.map((m: any) => ({
+          instrument: INSTRUMENTS[m.instrument as Instrument]?.name || m.instrument,
+          score: m.total_score,
+          max: INSTRUMENTS[m.instrument as Instrument]?.max ?? 0,
+          severity: m.severity,
+          date: m.taken_on,
+        }));
+      }
+
+      const { data: prev } = await supabase
+        .from('session_notes')
+        .select('content, updated_at, session_id')
+        .eq('client_id', clientId)
+        .neq('session_id', sessionId ?? '')
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      if (prev?.[0]?.content) {
+        const c = prev[0].content as Record<string, string>;
+        const summary = Object.values(c).filter(Boolean).join(' ').trim();
+        if (summary) ctx.previousNote = summary.slice(0, 800);
+      }
+    }
+    return ctx;
+  }, [sessions, clients, sessionId, clientId]);
+
   const runAI = async () => {
     if (!rawText.trim()) { showAlert('Add your notes', 'Type or paste your rough session notes first — AI will structure them.'); return; }
     setStructuring(true);
-    const { data, error } = await structureSessionNote({ template, rawText: rawText.trim() });
+    const context = await gatherContext();
+    const { data, error } = await structureSessionNote({
+      template,
+      rawText: rawText.trim(),
+      modalities: user?.modalities,
+      context,
+    });
     setStructuring(false);
     if (error || !data) { showAlert('AI unavailable', error || 'Could not structure the note. You can still write it manually.'); return; }
     setContent(prev => ({ ...prev, ...data.fields }));

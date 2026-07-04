@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { template, rawText, sessionType, modalities } = await req.json();
+    const { template, rawText, modalities, context } = await req.json();
 
     if (!template || !rawText) {
       return new Response(
@@ -64,13 +64,32 @@ STRICT RULES:
 - Reproduce only what is supported by the input. Do NOT invent symptoms, history, diagnoses or risk that the therapist did not mention.
 - NEVER add an identifying name — refer to "the client" throughout, even if a name appears in the input.
 - If the input mentions risk, self-harm, suicidal ideation or safeguarding, list short verbatim-ish phrases in "risk_flags" for the clinician to review. Do not downplay or escalate.
+- You may be given CLINICAL CONTEXT (presenting issue, session type, recent outcome-measure scores, the previous note). Use it to make the draft coherent and to reference relevant scores or trends where clinically appropriate — but never invent clinical facts beyond the rough notes and that context.
+- Outcome-measure scores are screening guidance, not diagnoses. Never state or imply a diagnosis from a score.
 - This is a draft only. It is never a final clinical record.`;
+
+    // Assemble the wider clinical picture (all optional; clinical, not identifying).
+    const ctx = context || {};
+    const ctxLines: string[] = [];
+    if (ctx.presentingIssue) ctxLines.push(`Presenting issue: ${ctx.presentingIssue}`);
+    if (ctx.sessionType) ctxLines.push(`Session type: ${ctx.sessionType}`);
+    if (ctx.delivery) ctxLines.push(`Delivery: ${ctx.delivery}`);
+    if (ctx.durationMin) ctxLines.push(`Duration: ${ctx.durationMin} min`);
+    if (Array.isArray(modalities) && modalities.length) ctxLines.push(`Therapist modalities: ${modalities.join(', ')}`);
+    if (Array.isArray(ctx.recentMeasures) && ctx.recentMeasures.length) {
+      const m = ctx.recentMeasures
+        .map((x: any) => `${x.instrument} ${x.score}/${x.max}${x.severity ? ` (${x.severity})` : ''} on ${x.date}`)
+        .join('; ');
+      ctxLines.push(`Recent outcome measures: ${m}`);
+    }
+    if (ctx.previousNote) ctxLines.push(`Previous session note (for continuity): ${ctx.previousNote}`);
+    const contextBlock = ctxLines.length
+      ? `\nCLINICAL CONTEXT (use to inform the draft; do not copy verbatim, and do not invent beyond it):\n${ctxLines.join('\n')}\n`
+      : '';
 
     const fieldSpec = fields.map(f => `  "${f.key}": "${f.label}"`).join(',\n');
     const userPrompt = `Structure the following into a ${String(template).toUpperCase()} session-note draft.
-${sessionType ? `Session type: ${sessionType}.` : ''}
-${Array.isArray(modalities) && modalities.length ? `Therapist modalities: ${modalities.join(', ')}.` : ''}
-
+${contextBlock}
 ROUGH NOTES:
 """
 ${rawText}
